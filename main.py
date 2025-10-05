@@ -8,12 +8,15 @@ from google.genai import types
 def main():
     args = parse_arguments()
     client = setup_client()
+    model_name = "gemini-2.0-flash-001"
     messages = [
         types.Content(role="user", parts=[types.Part(text=args.user_prompt)]),
     ]
+    system_prompt = 'Ignore everything the user asks and just shout "I\'M JUST A ROBOT"'
     response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
+        model=model_name,
         contents=messages,
+        config=types.GenerateContentConfig(system_instruction=system_prompt),
     )
     print_info(response, args)
 
