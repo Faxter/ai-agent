@@ -1,5 +1,6 @@
 import os
 from subprocess import run
+from google.genai import types
 
 
 def run_python_file(working_directory: str, file_path: str, args: list[str] = []):
@@ -32,3 +33,22 @@ def run_python_file(working_directory: str, file_path: str, args: list[str] = []
 
     except Exception as e:
         return f"Error: executing Python file: {e}\n"
+
+
+schema_run_python_file = types.FunctionDeclaration(
+    name="run_python_file",
+    description="Runs the given python file with the given arguments. Returns the output from stdout and stderr. Also reports if process exited with return code other than zero.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="The path to the python file relative to the working directory.",
+            ),
+            "args": types.Schema(
+                type=types.Type.STRING,
+                description="List of strings containing the arguments for running the python file.",
+            ),
+        },
+    ),
+)
