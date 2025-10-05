@@ -17,13 +17,27 @@ def main():
         types.Content(role="user", parts=[types.Part(text=args.user_prompt)]),
     ]
     config = create_config()
-    response = client.models.generate_content(
-        model=model_name,
-        contents=messages,
-        config=config,
-    )
-    execute_reponse(response, args.verbose)
-    print_meta_data(response.usage_metadata, args.verbose)
+    MAX_CALLS = 10
+    call_counter = 0
+    while call_counter < MAX_CALLS:
+        call_counter += 1
+        response = client.models.generate_content(
+            model=model_name,
+            contents=messages,
+            config=config,
+        )
+        if response.candidates:
+            for candidate in response.candidates:
+                if candidate.content:
+                    messages.append(candidate.content)
+
+        if response.function_calls:
+            execute_function_calls(response.function_calls, messages, args.verbose)
+        else:
+            if response.text:
+                print(response.text)
+                break
+        print_meta_data(response.usage_metadata, args.verbose)
 
 
 def parse_arguments():
@@ -72,9 +86,13 @@ def get_system_prompt():
     """
 
 
-def execute_reponse(response: types.GenerateContentResponse, verbose: bool):
-    if response.function_calls:
-        for function_call in response.function_calls:
+def execute_function_calls(
+    function_calls: list[types.FunctionCall],
+    conversation: list[types.Content],
+    verbose: bool,
+):
+    try:
+        for function_call in function_calls:
             result = call_function(function_call, verbose)
             if not result.parts:
                 raise Exception("Error: content of response is missing its parts!")
@@ -86,8 +104,10 @@ def execute_reponse(response: types.GenerateContentResponse, verbose: bool):
                 raise Exception("Error: content of response is missing the reponse!")
             if verbose:
                 print(f"-> {result.parts[0].function_response.response}")
-    else:
-        print(response.text)
+
+            conversation.append(result)
+    except Exception as e:
+        print(e)
 
 
 def print_meta_data(
@@ -106,7 +126,8 @@ def call_function(function_call_part: types.FunctionCall, verbose: bool = False)
 
     working_dir = "./calculator"
     function_name = function_call_part.name if function_call_part.name else ""
-    function_result = ""
+    function_result: str = ""
+    response: dict[str, str] = {}
     match function_name:
         case "get_files_info":
             function_result = get_files_info(working_dir)
@@ -117,21 +138,14 @@ def call_function(function_call_part: types.FunctionCall, verbose: bool = False)
         case "write_file":
             function_result = write_file(working_dir, **function_call_part.args)
         case _:
-            return types.Content(
-                role="tool",
-                parts=[
-                    types.Part.from_function_response(
-                        name=function_name,
-                        response={"error": f"Unknown function: {function_name}"},
-                    )
-                ],
-            )
+            response = {"error": f"Unknown function: {function_name}"}
+    response = {"result": function_result}
     return types.Content(
-        role="tool",
+        role="user",
         parts=[
             types.Part.from_function_response(
                 name=function_name,
-                response={"result": function_result},
+                response=response,
             )
         ],
     )
