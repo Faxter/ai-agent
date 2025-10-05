@@ -3,10 +3,10 @@ import os
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from functions.get_files_info import schema_get_files_info
-from functions.get_file_content import schema_get_file_content
-from functions.run_python_file import schema_run_python_file
-from functions.write_file import schema_write_file
+from functions.get_files_info import schema_get_files_info, get_files_info
+from functions.get_file_content import schema_get_file_content, get_file_content
+from functions.run_python_file import schema_run_python_file, run_python_file
+from functions.write_file import schema_write_file, write_file
 
 
 def main():
@@ -22,7 +22,7 @@ def main():
         contents=messages,
         config=config,
     )
-    print_response(response)
+    execute_reponse(response, args.verbose)
     print_meta_data(response.usage_metadata, args.verbose)
 
 
@@ -72,10 +72,20 @@ def get_system_prompt():
     """
 
 
-def print_response(response: types.GenerateContentResponse):
+def execute_reponse(response: types.GenerateContentResponse, verbose: bool):
     if response.function_calls:
         for function_call in response.function_calls:
-            print(f"Calling function: {function_call.name}({function_call.args})")
+            result = call_function(function_call, verbose)
+            if not result.parts:
+                raise Exception("Error: content of response is missing its parts!")
+            if not result.parts[0].function_response:
+                raise Exception(
+                    "Error: content of response is missing the function_response!"
+                )
+            if not result.parts[0].function_response.response:
+                raise Exception("Error: content of response is missing the reponse!")
+            if verbose:
+                print(f"-> {result.parts[0].function_response.response}")
     else:
         print(response.text)
 
@@ -86,6 +96,45 @@ def print_meta_data(
     if meta and verbose:
         print(f"Prompt tokens: {meta.prompt_token_count}")
         print(f"Response tokens: {meta.candidates_token_count}")
+
+
+def call_function(function_call_part: types.FunctionCall, verbose: bool = False):
+    if verbose:
+        print(f"Calling function: {function_call_part.name}({function_call_part.args})")
+    else:
+        print(f" - Calling function: {function_call_part.name}")
+
+    working_dir = "./calculator"
+    function_name = function_call_part.name if function_call_part.name else ""
+    function_result = ""
+    match function_name:
+        case "get_files_info":
+            function_result = get_files_info(working_dir)
+        case "get_file_content":
+            function_result = get_file_content(working_dir, **function_call_part.args)
+        case "run_python_file":
+            function_result = run_python_file(working_dir, **function_call_part.args)
+        case "write_file":
+            function_result = write_file(working_dir, **function_call_part.args)
+        case _:
+            return types.Content(
+                role="tool",
+                parts=[
+                    types.Part.from_function_response(
+                        name=function_name,
+                        response={"error": f"Unknown function: {function_name}"},
+                    )
+                ],
+            )
+    return types.Content(
+        role="tool",
+        parts=[
+            types.Part.from_function_response(
+                name=function_name,
+                response={"result": function_result},
+            )
+        ],
+    )
 
 
 if __name__ == "__main__":
