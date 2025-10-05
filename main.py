@@ -33,7 +33,7 @@ def main():
         config=config,
     )
     print_response(response)
-    print_meta_data(response.usage_metadata, args.verbose, args.user_prompt)
+    print_meta_data(response.usage_metadata, args.verbose)
 
 
 def parse_arguments():
@@ -62,12 +62,9 @@ def print_response(response: types.GenerateContentResponse):
 
 
 def print_meta_data(
-    meta: types.GenerateContentResponseUsageMetadata | None,
-    verbose: bool,
-    user_prompt: str,
+    meta: types.GenerateContentResponseUsageMetadata | None, verbose: bool
 ):
     if meta and verbose:
-        print(f"User prompt: {user_prompt}")
         print(f"Prompt tokens: {meta.prompt_token_count}")
         print(f"Response tokens: {meta.candidates_token_count}")
 
